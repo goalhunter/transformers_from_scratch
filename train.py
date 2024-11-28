@@ -14,9 +14,9 @@ from tokenizers.pre_tokenizers import Whitespace
 
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
-from model import Transformer, build_transformer
+from model import build_transformer
 
-import tqdm
+from tqdm import tqdm
 
 import warnings
 
@@ -40,12 +40,12 @@ def get_ds(config):
     ds_raw = load_dataset('opus_books', f'{config["lang_src"]}-{config["lang_tgt"]}', split='train')
 
     # build tokenizers
-    tokenizer_src = get_or_build_tokenizer(config, ds_raw, config=config['lang_src'])
-    tokenizer_tgt = get_or_build_tokenizer(config, ds_raw, config=config['lang_tgt'])
+    tokenizer_src = get_or_build_tokenizer(config, ds_raw, config['lang_src'])
+    tokenizer_tgt = get_or_build_tokenizer(config, ds_raw, config['lang_tgt'])
 
     # keep 90% for training and 10% for validation
     train_ds_size = int(0.9 * len(ds_raw))
-    val_ds_size = int(ds_raw) - train_ds_size
+    val_ds_size = int(len(ds_raw)) - train_ds_size
     train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
 
     train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
@@ -69,7 +69,7 @@ def get_ds(config):
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
 
 def get_model(config, vocab_src_len, vocab_tgt_len):
-    model = build_transformer(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'], config['d_model'])
+    model = build_transformer(vocab_src_len, vocab_tgt_len, config["seq_len"], config['seq_len'], d_model=config['d_model'])
     return model
 
 def train_model(config):
@@ -84,7 +84,7 @@ def train_model(config):
 
     # tensorboard
     writer = SummaryWriter(config['experiment_name'])
-    optimizer = torch.optim.adam(model.parameters(), lr=config['lr'], eps=1e-9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], eps=1e-9)
 
     initial_epoch = 0
     global_step = 0
@@ -109,7 +109,7 @@ def train_model(config):
 
             # run the tensors through the transformer
             encoder_output = model.encode(encoder_input, encoder_mask)
-            decoder_output = model.decode(decoder_input, decoder_mask)
+            decoder_output = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
             proj_output = model.project(decoder_output)
 
             label = batch['label'].to(device)
